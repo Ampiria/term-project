@@ -4,7 +4,7 @@ from direct.task import Task
 from Projectile import Projectile
 
 class Character:
-    def __init__(self, model, scale, pos, render, animations, base, path):
+    def __init__(self, model, scale, pos, render, animations, base, path, health):
         self.actor = Actor(model, animations)
         self.actor.setScale(scale)
         self.actor.setPos(pos)
@@ -20,6 +20,8 @@ class Character:
         self.pusher = CollisionHandlerPusher()
         self.pusher.addCollider(self.fromObj, self.actor)
         self.fromObj.show()
+        self.life = health
+        self.currLife = health
 
     def fire(self):
         self.bullet = Projectile(self.base, self.path, "/bullet.egg",
@@ -28,17 +30,21 @@ class Character:
 
     def moveY(self, y):
         self.y = y
-        self.update()
 
     def moveZ(self, z):
         self.z = z
-        self.update()
 
     def getX(self):
         return self.actor.getX()
 
     def getY(self):
         return self.actor.getY()
+
+    def getLife(self):
+        return self.currLife
+
+    def maxLife(self):
+        return self.life
 
     def move(self, task):
         if self.y == 0:
@@ -50,6 +56,3 @@ class Character:
             self.actor.setPos(self.actor, 0, -self.y, 0)
         self.actor.setHpr(self.actor, self.z, 0, 0)
         return Task.cont
-
-    def update(self):
-        return self.y, self.z, self.actor.getPos()

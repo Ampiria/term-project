@@ -1,10 +1,17 @@
+#############################
+# Sockets Server Demo
+# by Rohan Varma
+# adapted by Kyle Chin
+#############################
+
 import socket
 import threading
-import Queue
+from Queue import Queue
 
-HOST = ""
+HOST = ""  # put your IP address here if playing on multiple computers
 PORT = 50003
 BACKLOG = 2
+
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((HOST, PORT))
 server.listen(BACKLOG)
@@ -24,7 +31,7 @@ def handleClient(client, serverChannel, cID, clientele):
                 serverChannel.put(str(cID) + " " + readyMsg)
                 command = msg.split("\n")
         except:
-            clientele.pop(cID)
+            # we failed
             return
 
 
@@ -36,12 +43,12 @@ def serverThread(clientele, serverChannel):
         senderID = msgList[0]
         instruction = msgList[1]
         details = " ".join(msgList[2:])
-        if details != "":
+        if (details != ""):
             for cID in clientele:
                 if cID != senderID:
                     sendMsg = instruction + " " + senderID + " " + details + "\n"
                     clientele[cID].send(sendMsg.encode())
-                    print (">sent to %s:" % cID, sendMsg[:-1])
+                    print("> sent to %s:" % cID, sendMsg[:-1])
         print()
         serverChannel.task_done()
 
@@ -49,17 +56,19 @@ def serverThread(clientele, serverChannel):
 clientele = dict()
 playerNum = 0
 
-serverChannel = Queue.Queue(100)
+serverChannel = Queue(100)
 threading.Thread(target=serverThread, args=(clientele, serverChannel)).start()
 
 names = ["player1", "player2"]
+
 while True:
     client, address = server.accept()
     # myID is the key to the client in the clientele dictionary
     myID = names[playerNum]
+    playerNum += 1
     print(myID, playerNum)
     for cID in clientele:
-        print(repr(cID), repr(playerNum))
+        print (repr(cID), repr(playerNum))
         clientele[cID].send(("newPlayer %s\n" % myID).encode())
         client.send(("newPlayer %s\n" % cID).encode())
     clientele[myID] = client
@@ -67,4 +76,3 @@ while True:
     print("connection recieved from %s" % myID)
     threading.Thread(target=handleClient, args=
     (client, serverChannel, myID, clientele)).start()
-    playerNum += 1

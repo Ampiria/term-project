@@ -1,3 +1,4 @@
+from direct.gui.DirectWaitBar import DirectWaitBar, TextNode
 from direct.showbase.ShowBase import *
 from panda3d.core import Filename, GeoMipTerrain, CollisionTraverser
 from Character import *
@@ -49,16 +50,26 @@ class App(ShowBase):
         terrain.generate()
         self.player = Character("models/panda-model", 0.05, (300, 300, 0),
                                 self.render, {"walk": "models/panda-walk4"},
-                                self, self.path)
-        self.accept("w", self.player.moveY, [-100])
-        self.accept("w-up", self.player.moveY, [0])
-        self.accept("s", self.player.moveY, [100])
-        self.accept("s-up", self.player.moveY, [0])
-        self.accept("a", self.player.moveZ, [5])
-        self.accept("a-up", self.player.moveZ, [0])
-        self.accept("d", self.player.moveZ, [-5])
-        self.accept("d-up", self.player.moveZ, [0])
-        self.accept("space", self.player.fire)
+                                self, self.path, 200)
+        self.lifeBar = DirectWaitBar(text="Health", text_fg=(1, 1, 1, 1),
+                                     text_pos=(-1.2, -0.18, 0),
+                                     text_align=TextNode.ALeft,
+                                     value=400, barColor=(0, 1, 0.25, 1),
+                                     barBorderWidth=(0.03, 0.03), borderWidth=(0.01, 0.01),
+                                     frameColor=(0.8, 0.05, 0.10, 1),
+                                     frameSize=(-1.2, 0, 0, -0.1),
+                                     pos=(-0.2, 0, self.a2dTop - 0.15))
+        self.lifeBar.setTransparency(1)
+        self.lifeBar.reparentTo(self.render2d)
+        self.accept("w", self.moveY, [-80])
+        self.accept("w-up", self.moveY, [0])
+        self.accept("s", self.moveY, [80])
+        self.accept("s-up", self.moveY, [0])
+        self.accept("a", self.moveZ, [5])
+        self.accept("a-up", self.moveZ, [0])
+        self.accept("d", self.moveZ, [-5])
+        self.accept("d-up", self.moveZ, [0])
+        self.accept("space", self.fire)
         self.taskMgr.add(self.camra, "Cam")
         self.taskMgr.add(self.player.move, "Move")
         self.taskMgr.add(self.update, "Update")
@@ -71,19 +82,55 @@ class App(ShowBase):
         self.camera.setHpr(10, 270, 100)
         return Task.cont
 
+    def moveY(self, amount):
+        self.player.moveY(amount)
+        msg = "moved y " + str(amount) + "\n"
+        print("sending: ", msg)
+        server.send(msg.encode())
+
+    def moveZ(self, amount):
+        self.player.moveZ(amount)
+        msg = "moved z " + str(amount) + "\n"
+        print("sending: ", msg)
+        server.send(msg.encode())
+
+    def fire(self):
+        self.player.fire()
+        msg = "fired\n"
+        print ("sending: ", msg)
+        server.send(msg.encode())
+
     def update(self, task):
-        while serverMsg.qsize() > 0
+        while serverMsg.qsize() > 0:
             msg = serverMsg.get(False)
             try:
                 print("received: ", msg, "\n")
                 msg = msg.split()
                 command = msg[0]
+                if command == "myIDis":
+                    self.myPID = msg[1]
 
-                if command ==
-
+                elif command == "newPlayer":
+                    n = msg[1]
+                    self.others[n] = Character("models/panda-model", 0.05, (300, 300, 0),
+                                               self.render,
+                                               {"walk": "models/panda-walk4"}, self,
+                                               self.path, 200)
+                    self.taskMgr.add(self.others[n].move, "Move" + n)
+                elif command == "moved":
+                    PID = msg[1]
+                    if msg[2] == "y":
+                        self.others[PID].moveY(int(msg[3]))
+                    else:
+                        self.others[PID].moveZ(int(msg[3]))
+                elif command == "fired":
+                    PID = msg[1]
+                    self.others[PID].fire()
             except:
                 print("rip")
             serverMsg.task_done()
+        return Task.cont
+
 
 a = App()
 
