@@ -1,4 +1,5 @@
-from direct.gui.DirectWaitBar import DirectWaitBar, TextNode
+from direct.gui.DirectWaitBar import DirectWaitBar, CollisionHandlerQueue, ClockObject, \
+    CollisionHandlerEvent
 from direct.showbase.ShowBase import *
 from panda3d.core import Filename, GeoMipTerrain, CollisionTraverser
 from Character import *
@@ -8,7 +9,7 @@ import socket
 import threading
 from Queue import Queue
 
-HOST = "128.237.142.67"
+HOST = "128.237.84.118"
 PORT = 50003
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -38,6 +39,10 @@ threading.Thread(target=handleServerMsg, args=(server, serverMsg)).start()
 class App(ShowBase):
     def __init__(self):
         ShowBase.__init__(self)
+        self.cTrav = CollisionTraverser()
+        self.coll = CollisionHandlerEvent()
+        self.coll.addInPattern("%fn-into-%in")
+        self.clock = ClockObject()
         self.path = os.path.abspath(sys.path[0])
         self.path = Filename.fromOsSpecific(self.path).getFullpath()
         terrain = GeoMipTerrain("worldTerrain")
@@ -50,17 +55,32 @@ class App(ShowBase):
         terrain.generate()
         self.player = Character("models/panda-model", 0.05, (300, 300, 0),
                                 self.render, {"walk": "models/panda-walk4"},
-                                self, self.path, 200)
-        self.lifeBar = DirectWaitBar(text="Health", text_fg=(1, 1, 1, 1),
-                                     text_pos=(-1.2, -0.18, 0),
-                                     text_align=TextNode.ALeft,
-                                     value=400, barColor=(0, 1, 0.25, 1),
-                                     barBorderWidth=(0.03, 0.03), borderWidth=(0.01, 0.01),
+                                self, self.path, 200, "player")
+        self.addControls()
+        self.loadUI()
+        self.startTasks()
+        self.accept("proj-into-player", self.player.changeLife, [-1])
+        self.others = dict()
+        self.cTrav.showCollisions(self.render)
+
+    def startTasks(self):
+        self.taskMgr.add(self.camra, "Cam")
+        self.taskMgr.add(self.update, "Update")
+        self.taskMgr.add(self.manageCollisions, "colls")
+
+    def loadUI(self):
+        self.lifeBar = DirectWaitBar(text="", value=self.player.life,
+                                     barColor=(0, 1, 0.25, 1),
+                                     barBorderWidth=(0.03, 0.03),
+                                     borderWidth=(0.01, 0.01),
                                      frameColor=(0.8, 0.05, 0.10, 1),
+                                     range=self.player.life,
                                      frameSize=(-1.2, 0, 0, -0.1),
-                                     pos=(-0.2, 0, self.a2dTop - 0.15))
+                                     pos=(0.6, self.a2dLeft, self.a2dBottom + 0.15))
         self.lifeBar.setTransparency(1)
         self.lifeBar.reparentTo(self.render2d)
+
+    def addControls(self):
         self.accept("w", self.moveY, [-80])
         self.accept("w-up", self.moveY, [0])
         self.accept("s", self.moveY, [80])
@@ -70,17 +90,25 @@ class App(ShowBase):
         self.accept("d", self.moveZ, [-5])
         self.accept("d-up", self.moveZ, [0])
         self.accept("space", self.fire)
-        self.taskMgr.add(self.camra, "Cam")
-        self.taskMgr.add(self.player.move, "Move")
-        self.taskMgr.add(self.update, "Update")
-        self.cTrav = CollisionTraverser('t')
+        self.acceptOnce("o", self.aiBattle)
+
+    def manageCollisions(self, task):
         self.cTrav.traverse(self.render)
-        self.others = dict()
+        self.player.collisions()
+        for a in self.others:
+            self.others[a].collisions()
+        return Task.cont
 
     def camra(self, task):
         self.camera.setPos(self.player.getX(), self.player.getY(), 750)
         self.camera.setHpr(10, 270, 100)
         return Task.cont
+
+    def aiBattle(self):
+        self.ai = AI("models/panda-model", 0.05, (700, 700, 0),
+                                self.render, {"walk": "models/panda-walk4"},
+                                self, self.path, 200)
+        self.others["ai"] = self.ai
 
     def moveY(self, amount):
         self.player.moveY(amount)
@@ -101,6 +129,8 @@ class App(ShowBase):
         server.send(msg.encode())
 
     def update(self, task):
+        self.lifeBar['value'] = self.player.currLife
+        self.lifeBar.setValue()
         while serverMsg.qsize() > 0:
             msg = serverMsg.get(False)
             try:
