@@ -1,6 +1,6 @@
 from math import *
 
-from direct.interval.FunctionInterval import Wait, Func, BitMask32
+from direct.interval.FunctionInterval import Func
 from direct.interval.MetaInterval import Sequence
 from direct.interval.ProjectileInterval import ProjectileInterval, \
     CollisionSphere, CollisionNode

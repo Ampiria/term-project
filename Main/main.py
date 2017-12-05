@@ -1,5 +1,4 @@
-from direct.gui.DirectWaitBar import DirectWaitBar, CollisionHandlerQueue, ClockObject, \
-    CollisionHandlerEvent
+from direct.gui.DirectWaitBar import DirectWaitBar, ClockObject, CollisionHandlerEvent
 from direct.showbase.ShowBase import *
 from panda3d.core import Filename, GeoMipTerrain, CollisionTraverser
 from Character import *
@@ -9,7 +8,7 @@ import socket
 import threading
 from Queue import Queue
 
-HOST = "128.237.84.118"
+HOST = "128.237.197.120"
 PORT = 50003
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -39,6 +38,7 @@ threading.Thread(target=handleServerMsg, args=(server, serverMsg)).start()
 class App(ShowBase):
     def __init__(self):
         ShowBase.__init__(self)
+        self.ai = None
         self.cTrav = CollisionTraverser()
         self.coll = CollisionHandlerEvent()
         self.coll.addInPattern("%fn-into-%in")
@@ -61,7 +61,8 @@ class App(ShowBase):
         self.startTasks()
         self.accept("proj-into-player", self.player.changeLife, [-1])
         self.others = dict()
-        self.cTrav.showCollisions(self.render)
+        self.roundOv = False
+        self.gameOver = False
 
     def startTasks(self):
         self.taskMgr.add(self.camra, "Cam")
@@ -73,13 +74,12 @@ class App(ShowBase):
                                      barColor=(0, 1, 0.25, 1),
                                      barBorderWidth=(0.03, 0.03),
                                      borderWidth=(0.01, 0.01),
-                                     frameColor=(0.8, 0.05, 0.10, 1),
+                                     frameColor=(0.5, 0.55, 0.70, 1),
                                      range=self.player.life,
                                      frameSize=(-1.2, 0, 0, -0.1),
                                      pos=(0.6, self.a2dLeft, self.a2dBottom + 0.15))
         self.lifeBar.setTransparency(1)
         self.lifeBar.reparentTo(self.render2d)
-
     def addControls(self):
         self.accept("w", self.moveY, [-80])
         self.accept("w-up", self.moveY, [0])
@@ -109,6 +109,18 @@ class App(ShowBase):
                                 self.render, {"walk": "models/panda-walk4"},
                                 self, self.path, 200)
         self.others["ai"] = self.ai
+        self.aiLifebar = DirectWaitBar(text="", value=self.ai.life,
+                                       barColor=(0, 1, 0.25, 1),
+                                       barBorderWidth=(0.003, 0.003),
+                                       borderWidth=(0.001, 0.001),
+                                       frameColor=(0.5, 0.55, 0.70, 1),
+                                       range=self.ai.life,
+                                       frameSize=(-0.45, 0, 0, -0.1),
+                                       pos=(1, 0, self.a2dTop - 0.11)
+                                       )
+        self.aiLifebar.setTransparency(1)
+        self.aiLifebar.reparentTo(self.render2d)
+
 
     def moveY(self, amount):
         self.player.moveY(amount)
@@ -131,6 +143,9 @@ class App(ShowBase):
     def update(self, task):
         self.lifeBar['value'] = self.player.currLife
         self.lifeBar.setValue()
+        if self.ai is not None:
+            self.aiLifebar['value'] = self.ai.currLife
+            self.aiLifebar.setValue()
         while serverMsg.qsize() > 0:
             msg = serverMsg.get(False)
             try:
@@ -145,7 +160,7 @@ class App(ShowBase):
                     self.others[n] = Character("models/panda-model", 0.05, (300, 300, 0),
                                                self.render,
                                                {"walk": "models/panda-walk4"}, self,
-                                               self.path, 200)
+                                               self.path, 200, "play2")
                     self.taskMgr.add(self.others[n].move, "Move" + n)
                 elif command == "moved":
                     PID = msg[1]
