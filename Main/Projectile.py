@@ -4,12 +4,13 @@ from direct.interval.FunctionInterval import Func
 from direct.interval.MetaInterval import Sequence
 from direct.interval.ProjectileInterval import ProjectileInterval, \
     CollisionSphere, CollisionNode
+from direct.task.Task import Task
 
 import Character
 
 
 
-class Projectile:
+class Projectile(object):
     def __init__(self, base, path, p, actor, scale, render, character):
         self.proj = base.loader.loadModel(path + p)
         self.proj.setPos(actor.getPos())
@@ -29,11 +30,17 @@ class Projectile:
         self.projColNode = self.proj.attachNewNode(self.colNode)
         self.projColNode.show()
         if isinstance(self.character, Character.AI):
-            self.base.cTrav.addCollider(self.projColNode, self.base.player.colHand)
-            self.base.player.projList.append(self)
+            try:
+                self.base.cTrav.addCollider(self.projColNode, self.base.player.colHand)
+                self.base.player.projList.append(self)
+            except:
+                pass
         else:
-            self.base.cTrav.addCollider(self.projColNode, self.base.ai.colHand)
-            self.base.ai.projList.append(self)
+            try:
+                self.base.cTrav.addCollider(self.projColNode, self.base.ai.colHand)
+                self.base.ai.projList.append(self)
+            except:
+                pass
 
     def kill(self):
         self.proj.detachNode()

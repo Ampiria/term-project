@@ -17,7 +17,7 @@ class Character(object):
         self.actor.reparentTo(render)
         self.render = render
         self.base = base
-        self.y, self.z = 0, 0
+        self.y, self.z, self.up = 0, 0, 0
         self.path = path
         self.life = health
         self.currLife = health
@@ -41,17 +41,16 @@ class Character(object):
         self.rounds = 0
         self.lost = False
         self.win = False
-        self.healUp = Ability("j", 8, self.heal, self.base)
+        self.abilities = []
+        self.healUp = Ability("j", 4, "heal()", self.base, self)
+        self.ultAbil = Ability("k", 15, "ult()", self.base, self)
+        self.abilities.append(self.ultAbil)
+        self.abilities.append(self.healUp)
 
     def fire(self):
         self.bullet = Projectile(self.base, self.path, "/bullet.egg",
                                  self.actor, 10, self.render, self)
         self.bullet.fire()
-
-    def __eq__(self, other):
-        if not isinstance(other, Character):
-            return False
-        return self.actor == other.actor
 
     def moveY(self, y):
         self.y = y
@@ -91,8 +90,6 @@ class Character(object):
         self.currLife += amount
         if self.currLife > self.life:
             self.currLife = self.life
-        if self.currLife < 0:
-            self.currLife = 0
         if self.currLife <= 0:
             self.lost = True
             self.base.roundOv = True
@@ -100,7 +97,7 @@ class Character(object):
     def move(self, task):
         if self.y == 0:
             self.actor.loop("walk")
-        self.actor.setPos(self.actor, 0, self.y, 0)
+        self.actor.setPos(self.actor, 0, self.y, self.up)
         if self.actor.getPos()[0] > 990 or self.actor.getPos()[0] < 30:
             self.actor.setPos(self.actor, 0, -self.y, 0)
         if self.actor.getPos()[1] > 990 or self.actor.getPos()[1] < 30:
@@ -109,9 +106,12 @@ class Character(object):
         return Task.cont
 
     def heal(self):
-        self.currLife += 25
-        if self.currLife > self.life:
-            self.currLife = self.life
+        self.changeLife(20)
+
+    def ult(self):
+        ult = Projectile(self.base, self.path, "/bullet.egg",
+                                 self.actor, 30, self.render, self)
+        ult.fire()
 
     def wonRound(self):
         pos = (-0.6 + self.rounds * 0.1, 0, self.base.a2dBottom + 0.25) if not \
@@ -129,15 +129,15 @@ class Character(object):
             self.win = True
             self.base.gameOver = True
         if self.base.roundOv:
+            self.base.roundOv = False
             if not self.lost:
                 self.rounds += 1
                 self.wonRound()
-            self.reset()
-            if isinstance(self, AI):
-                self.base.player.reset()
-            else:
+            self.base.player.reset()
+            try:
                 self.base.ai.reset()
-            self.base.roundOv = False
+            except:
+                pass
         if self.fireOnCooldown:
             if self.base.clock.get_long_time() - self.fireCooldownStart <= self.fireCooldown:
                 self.fireOnCooldown = False
@@ -145,18 +145,25 @@ class Character(object):
 
 
 class AI(Character):
-    def __init__(self, model, scale, pos, render, animations, base, path, health):
+    def __init__(self, model, scale, pos, render, animations, base, path, health,
+                 rate=8):
         super(AI, self).__init__(model, scale, pos, render, animations, base, path,
                                  health, "ai")
         self.base.taskMgr.add(self.ai, "ai")
+        self.fireRate = rate
 
     def ai(self, ai):
         if not self.base.gameOver:
             self.chaseTarget()
+            self.heel()
         else:
             self.moveZ(0)
             self.moveY(0)
         return Task.cont
+
+    def heel(self):
+        if self.currLife <= self.life - 20:
+            self.healUp.use()
 
     def chaseTarget(self):
         a = math.degrees(math.atan2(self.base.player.getY() - self.actor.getY(),
@@ -173,11 +180,52 @@ class AI(Character):
                 self.moveZ(-5)
         else:
             self.moveZ(0)
-            if randint(1, 100) < 10 and self.base.player.actor.getDistance(self.actor) \
-                    < 2000:
+            if randint(1, 100) < self.fireRate and self.base.player.actor.getDistance(
+                    self.actor) < 2000:
                 self.fire()
 
         if self.base.player.actor.getDistance(self.actor) > 2000:
             self.moveY(-80)
         else:
             self.moveY(0)
+
+
+class AdvancedAI(AI):
+    def __init__(self, model, scale, pos, render, animations, base, path, health):
+        super(AdvancedAI, self).__init__(model, scale, pos, render, animations, base,
+                                         path, health, 14)
+
+    def ai(self, ai):
+        super(AdvancedAI, self).ai(ai)
+        if not self.base.gameOver:
+            self.avoid()
+        return Task.cont
+
+    def heel(self):
+        if self.currLife < self.base.player.currLife:
+            super(AdvancedAI, self).heel()
+
+    def avoid(self):
+        if self.currLife < 0.4 * self.life:
+            a = math.degrees(math.atan2(self.base.player.getY() - self.actor.getY(),
+                                        self.base.player.getX() - self.actor.getX()))
+            c = self.actor.getH()
+            c -= 90
+            c += 0 if c > 0 else 360
+            a += 0 if a > 0 else 360
+
+            b = randint(int(a + 25), int(a + 360 - 25))
+            print(b)
+
+            if math.fabs(b - a) >= 5:
+                if c - a < 0:
+                    self.moveZ(5)
+                else:
+                    self.moveZ(-5)
+            else:
+                self.moveZ(0)
+
+            if self.base.player.actor.getDistance(self.actor) <= 7000:
+                self.moveY(-80)
+            else:
+                self.moveY(0)
